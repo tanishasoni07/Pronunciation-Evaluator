@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hear the pronunciation of a word or sentence directly in the browser.">
+    <title>Pronunciation Practice</title>
+    <link rel="stylesheet" href="background.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <div class="brand-mark" aria-hidden="true">P</div>
+        <div>
+            <div class="brand-name">Pronunciation Practice</div>
+            <div class="brand-subtitle">Browser-based pronunciation playback</div>
+        </div>
+    </div>
+
+    <div class="topbar-meta">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Ready to pronounce</span>
+    </div>
+</header>
+
+<main class="page-shell">
+    <section class="hero">
+        <div class="eyebrow">Speech playback workspace</div>
+        <h1>Hear the pronunciation of any word or sentence instantly</h1>
+        <p class="hero-copy">
+            Enter a word or sentence, choose a voice, and play the pronunciation directly in the browser.
+        </p>
+    </section>
+
+    <section class="workspace">
+        <div class="container" aria-labelledby="formTitle">
+            <div class="panel-header">
+                <div>
+                    <h2 id="formTitle">Pronunciation input</h2>
+                    <p>Type the word or sentence you want the app to pronounce.</p>
+                </div>
+            </div>
+
+            <form id="pronounceForm" class="form">
+                <div class="field">
+                    <label for="expected">Word or sentence</label>
+                    <input type="text" id="expected" name="expected" placeholder="Type the text to pronounce" required>
+                </div>
+
+                <div class="controls-grid">
+                    <div class="field">
+                        <label for="voiceSelect">Voice</label>
+                        <select id="voiceSelect"></select>
+                    </div>
+
+                    <div class="field">
+                        <label for="rate">Rate</label>
+                        <input type="range" id="rate" min="0.75" max="1.25" step="0.05" value="1">
+                    </div>
+
+                    <div class="field">
+                        <label for="pitch">Pitch</label>
+                        <input type="range" id="pitch" min="0.8" max="1.4" step="0.05" value="1">
+                    </div>
+                </div>
+
+                <div class="action-row">
+                    <button type="submit" id="submitBtn">Pronounce text</button>
+                    <button type="button" id="stopBtn" class="secondary-btn">Stop</button>
+                </div>
+            </form>
+
+            <div id="statusBox" class="status-box hidden" role="status" aria-live="polite"></div>
+        </div>
+
+        <aside class="side-panel">
+            <section class="info-card">
+                <div class="panel-header compact">
+                    <div>
+                        <h2>How it works</h2>
+                        <p>A simple flow for listening and repeating pronunciation.</p>
+                    </div>
+                </div>
+
+                <ol class="steps">
+                    <li>Enter the word or sentence.</li>
+                    <li>Select a voice and adjust speed if needed.</li>
+                    <li>Press pronounce to hear it spoken aloud.</li>
+                </ol>
+            </section>
+
+            <section class="container" aria-labelledby="previewTitle">
+                <div class="panel-header">
+                    <div>
+                        <h2 id="previewTitle">Playback preview</h2>
+                        <p>Use this area to confirm the current pronunciation settings.</p>
+                    </div>
+                </div>
+
+                <div class="preview-card">
+                    <span class="result-label">Text to pronounce</span>
+                    <strong id="recognized">Enter a word or sentence to begin.</strong>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <span class="result-label">Voice</span>
+                        <strong id="selectedVoice">Default voice</strong>
+                    </div>
+                    <div class="result-card">
+                        <span class="result-label">Rate</span>
+                        <strong id="selectedRate">1.00x</strong>
+                    </div>
+                    <div class="result-card">
+                        <span class="result-label">Pitch</span>
+                        <strong id="selectedPitch">1.00x</strong>
+                    </div>
+                </div>
+
+                <div class="tips-block">
+                    <h3>Tip</h3>
+                    <pre id="tips">Use a slower rate for longer sentences and a normal pitch for clearer pronunciation.</pre>
+                </div>
+            </section>
+        </aside>
+    </section>
+</main>
+
+<script>
+const form = document.getElementById("pronounceForm");
+const statusBox = document.getElementById("statusBox");
+const submitBtn = document.getElementById("submitBtn");
+const stopBtn = document.getElementById("stopBtn");
+const voiceSelect = document.getElementById("voiceSelect");
+const rateInput = document.getElementById("rate");
+const pitchInput = document.getElementById("pitch");
+const textInput = document.getElementById("expected");
+const recognized = document.getElementById("recognized");
+const selectedVoice = document.getElementById("selectedVoice");
+const selectedRate = document.getElementById("selectedRate");
+const selectedPitch = document.getElementById("selectedPitch");
+const tips = document.getElementById("tips");
+
+let voices = [];
+function showStatus(message, type = "info") {
+    statusBox.textContent = message;
+    statusBox.dataset.type = type;
+    statusBox.classList.remove("hidden");
+}
+
+function updatePreview() {
+    const text = textInput.value.trim();
+    recognized.textContent = text || "Enter a word or sentence to begin.";
+    selectedRate.textContent = `${Number(rateInput.value).toFixed(2)}x`;
+    selectedPitch.textContent = `${Number(pitchInput.value).toFixed(2)}x`;
+
+    const selectedOption = voiceSelect.selectedOptions[0];
+    selectedVoice.textContent = selectedOption ? selectedOption.textContent : "Default voice";
+}
+
+function populateVoices() {
+    voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
+    const availableVoices = englishVoices.length ? englishVoices : voices;
+
+    voiceSelect.innerHTML = "";
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Default voice";
+    voiceSelect.appendChild(defaultOption);
+
+    availableVoices.forEach((voice) => {
+        const option = document.createElement("option");
+        option.value = voice.name;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        voiceSelect.appendChild(option);
+    });
+
+    updatePreview();
+}
+
+function stopSpeech(silent = false) {
+    if (!window.speechSynthesis) {
+        return;
+    }
+
+    window.speechSynthesis.cancel();
+    if (!silent) {
+        showStatus("Pronunciation stopped.");
+    }
+}
+
+function speakText() {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+        showStatus("Speech synthesis is not supported in this browser.", "error");
+        return;
+    }
+
+    const text = textInput.value.trim();
+    if (!text) {
+        showStatus("Enter a word or sentence first.", "error");
+        textInput.focus();
+        return;
+    }
+
+    stopSpeech(true);
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const selectedName = voiceSelect.value;
+    const selectedVoiceObj = voices.find((voice) => voice.name === selectedName);
+
+    if (selectedVoiceObj) {
+        utterance.voice = selectedVoiceObj;
+    }
+
+    utterance.rate = Number(rateInput.value);
+    utterance.pitch = Number(pitchInput.value);
+    utterance.onend = () => {
+        showStatus("Pronunciation finished.");
+    };
+    utterance.onerror = () => {
+        showStatus("Unable to pronounce the text.", "error");
+    };
+
+    window.speechSynthesis.speak(utterance);
+
+    showStatus("Pronouncing the entered text...");
+}
+
+form.onsubmit = (e) => {
+    e.preventDefault();
+    speakText();
+};
+
+submitBtn.addEventListener("click", updatePreview);
+stopBtn.addEventListener("click", stopSpeech);
+textInput.addEventListener("input", updatePreview);
+voiceSelect.addEventListener("change", updatePreview);
+rateInput.addEventListener("input", updatePreview);
+pitchInput.addEventListener("input", updatePreview);
+
+if ("speechSynthesis" in window) {
+    populateVoices();
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+    updatePreview();
+} else {
+    showStatus("Speech synthesis is not supported in this browser.", "error");
+    submitBtn.disabled = true;
+    stopBtn.disabled = true;
+}
+</script>
+
+</body>
+</html>
